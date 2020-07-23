@@ -1,3 +1,7 @@
+The following license applies unless otherwise specified:
+
+================================================================================
+
 The MIT License (MIT)
 
 Copyright (c) 2015-2018 Joseph T. McBride
