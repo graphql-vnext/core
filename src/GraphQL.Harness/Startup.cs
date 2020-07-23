@@ -27,17 +27,22 @@ namespace GraphQL.Harness
         {
             // add execution components
             services.AddSingleton<IDocumentExecuter, DocumentExecuter>();
+            services.AddScoped<IDocumentExecuter, DI.DIDocumentExecuter>();
             services.AddSingleton<IDocumentWriter, DocumentWriter>();
 
             // add something like repository
-            services.AddSingleton<StarWarsData>();
+            services.AddSingleton<StarWarsData>(); //should be scoped, but since all of the singleton types still depend on this, it's a singleton
 
             // add graph types
-            services.AddSingleton<StarWarsQuery>();
+            //services.AddSingleton<StarWarsQuery>();
+            services.AddScoped<StarWarsQueryDI>();
+            services.AddSingleton<DI.DIObjectGraphType<StarWarsQueryDI>>();
             services.AddSingleton<StarWarsMutation>();
             services.AddSingleton<HumanType>();
             services.AddSingleton<HumanInputType>();
-            services.AddSingleton<DroidType>();
+            //services.AddSingleton<DroidType>();
+            services.AddScoped<DroidTypeDI>();
+            services.AddSingleton<DroidTypeDIGraph>();
             services.AddSingleton<CharacterInterface>();
             services.AddSingleton<EpisodeEnum>();
 
