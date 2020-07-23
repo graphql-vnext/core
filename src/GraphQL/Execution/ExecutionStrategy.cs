@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using GraphQL.DataLoader;
 using GraphQL.Language.AST;
 using GraphQL.Resolvers;
 using GraphQL.Types;
@@ -192,6 +193,94 @@ namespace GraphQL.Execution
 
                 node.Result = result;
 
+                if (!(result is IDataLoaderResult))
+                {
+                    CompleteNode(context, node);
+                }
+            }
+            catch (ExecutionError error)
+            {
+                error.AddLocation(node.Field, context.Document);
+                error.Path = node.Path;
+                context.Errors.Add(error);
+
+                node.Result = null;
+            }
+            catch (Exception ex)
+            {
+                if (context.ThrowOnUnhandledException)
+                    throw;
+
+                UnhandledExceptionContext exceptionContext = null;
+                if (context.UnhandledExceptionDelegate != null)
+                {
+                    exceptionContext = new UnhandledExceptionContext(context, resolveContext, ex);
+                    context.UnhandledExceptionDelegate(exceptionContext);
+                    ex = exceptionContext.Exception;
+                }
+
+                var error = new ExecutionError(exceptionContext?.ErrorMessage ?? $"Error trying to resolve {node.Name}.", ex);
+                error.AddLocation(node.Field, context.Document);
+                error.Path = node.Path;
+                context.Errors.Add(error);
+
+                node.Result = null;
+            }
+        }
+
+        protected virtual async Task CompleteDataLoaderNodeAsync(ExecutionContext context, ExecutionNode node)
+        {
+            if (!node.IsResultSet)
+                throw new InvalidOperationException("This execution node has not yet been executed");
+            if (!(node.Result is IDataLoaderResult dataLoaderResult))
+                throw new InvalidOperationException("This execution node is not pending completion");
+
+            try
+            {
+                node.Result = await dataLoaderResult.GetResultAsync(context.CancellationToken).ConfigureAwait(false);
+
+                if (!(node.Result is IDataLoaderResult))
+                {
+                    CompleteNode(context, node);
+                }
+            }
+            catch (ExecutionError error)
+            {
+                error.AddLocation(node.Field, context.Document);
+                error.Path = node.Path;
+                context.Errors.Add(error);
+
+                node.Result = null;
+            }
+            catch (Exception ex)
+            {
+                if (context.ThrowOnUnhandledException)
+                    throw;
+
+                if (context.UnhandledExceptionDelegate != null)
+                {
+                    var resolveContext = new ReadonlyResolveFieldContext(node, context);
+                    var exceptionContext = new UnhandledExceptionContext(context, resolveContext, ex);
+                    context.UnhandledExceptionDelegate(exceptionContext);
+                    ex = exceptionContext.Exception;
+                }
+
+                var error = new ExecutionError($"Error trying to resolve {node.Name}.", ex);
+                error.AddLocation(node.Field, context.Document);
+                error.Path = node.Path;
+                context.Errors.Add(error);
+
+                node.Result = null;
+            }
+        }
+
+        protected virtual void CompleteNode(ExecutionContext context, ExecutionNode node)
+        {
+            if (!node.IsResultSet)
+                throw new InvalidOperationException("This execution node has not yet been executed");
+
+            try
+            {
                 ValidateNodeResult(context, node);
 
                 // Build child nodes
@@ -220,15 +309,15 @@ namespace GraphQL.Execution
                 if (context.ThrowOnUnhandledException)
                     throw;
 
-                UnhandledExceptionContext exceptionContext = null;
                 if (context.UnhandledExceptionDelegate != null)
                 {
-                    exceptionContext = new UnhandledExceptionContext(context, resolveContext, ex);
+                    var resolveContext = new ReadonlyResolveFieldContext(node, context);
+                    var exceptionContext = new UnhandledExceptionContext(context, resolveContext, ex);
                     context.UnhandledExceptionDelegate(exceptionContext);
                     ex = exceptionContext.Exception;
                 }
 
-                var error = new ExecutionError(exceptionContext?.ErrorMessage ?? $"Error trying to resolve {node.Name}.", ex);
+                var error = new ExecutionError($"Error trying to resolve {node.Name}.", ex);
                 error.AddLocation(node.Field, context.Document);
                 error.Path = node.Path;
                 context.Errors.Add(error);
